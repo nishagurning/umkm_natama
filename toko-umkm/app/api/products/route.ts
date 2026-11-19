@@ -3,9 +3,10 @@ import { createClient } from '@supabase/supabase-js';
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const key =
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    process.env.SUPABASE_SERVICE_ROLE_KEY;
+    serviceKey && !serviceKey.startsWith('tempel_') ? serviceKey : anonKey;
 
   if (!url || !key) {
     throw new Error(
@@ -22,7 +23,8 @@ export async function GET() {
     const { data, error } = await supabase
       .from('products')
       .select('*')
-      .order('created_at', { ascending: false });
+      .eq('is_active', true)
+      .order('sku', { ascending: true });
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
@@ -54,8 +56,11 @@ export async function POST(request: Request) {
           description: body.description || '',
           price: Number(body.price),
           stock: Number(body.stock ?? 0),
+          unit: body.unit || '1 pcs',
+          variants: Array.isArray(body.variants) ? body.variants : ['Standar'],
           category: body.category || 'Makanan',
           image_url: body.image_url || '',
+          is_active: true,
         },
       ])
       .select()
