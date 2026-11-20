@@ -9,23 +9,30 @@ export default function Navbar() {
   const pathname = usePathname();
   const [cartCount, setCartCount] = useState(0);
 
-  const syncCart = () => {
-    try {
-      const saved = JSON.parse(localStorage.getItem('umkm_cart') || '[]');
-      const total = saved.reduce((sum: number, item: { quantity: number }) => sum + item.quantity, 0);
-      setCartCount(total);
-    } catch {
-      setCartCount(0);
-    }
-  };
-
   useEffect(() => {
-    syncCart();
-    window.addEventListener('cart-updated', syncCart);
-    return () => window.removeEventListener('cart-updated', syncCart);
-  }, []);
+    const updateCartCount = () => {
+      try {
+        const raw = localStorage.getItem('cart');
+        const cart = raw ? JSON.parse(raw) : [];
+        const total = Array.isArray(cart)
+          ? cart.reduce((sum, item) => sum + (Number(item.quantity) || 1), 0)
+          : 0;
+        setCartCount(total);
+      } catch {
+        setCartCount(0);
+      }
+    };
 
-  const links = [
+    updateCartCount();
+    window.addEventListener('storage', updateCartCount);
+    window.addEventListener('cart-updated', updateCartCount);
+    return () => {
+      window.removeEventListener('storage', updateCartCount);
+      window.removeEventListener('cart-updated', updateCartCount);
+    };
+  }, [pathname]);
+
+  const navLinks = [
     { href: '/', label: 'Beranda' },
     { href: '/katalog', label: 'Katalog' },
     { href: '/lacak-pesanan', label: 'Lacak Pesanan' },
@@ -33,31 +40,49 @@ export default function Navbar() {
   ];
 
   return (
-    <header className="border-b border-stone-200 bg-white sticky top-0 z-30">
-      <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between gap-6">
-        <Link href="/" className="text-xl font-bold tracking-tight text-zinc-900">
-          UMKM Natama
+    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-stone-200">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-4">
+        {/* Logo + Nama Brand */}
+        <Link href="/" className="flex items-center gap-3 shrink-0">
+          <img
+            src="/images/logo natama.png"
+            alt="Logo Natama Taste"
+            className="w-14 h-14 rounded-full object-cover border border-stone-200 bg-black"
+          />
+          <div className="leading-tight">
+            <span className="block font-bold text-stone-900 text-lg">
+              Natama Taste
+            </span>
+            <span className="block text-xs font-medium text-amber-700">
+              Na Tabo Do On
+            </span>
+          </div>
         </Link>
 
-        <nav className="flex items-center gap-6 text-sm font-medium text-stone-600">
-          {links.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={
-                pathname === item.href
-                  ? 'text-zinc-900 underline underline-offset-4'
-                  : 'hover:text-zinc-900'
-              }
-            >
-              {item.label}
-            </Link>
-          ))}
+        {/* Menu Navigasi */}
+        <nav className="hidden md:flex items-center gap-6 text-sm">
+          {navLinks.map((link) => {
+            const active = pathname === link.href;
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                className={`transition ${
+                  active
+                    ? 'font-semibold text-stone-900 underline underline-offset-4'
+                    : 'text-stone-600 hover:text-stone-900'
+                }`}
+              >
+                {link.label}
+              </Link>
+            );
+          })}
         </nav>
 
+        {/* Tombol Keranjang */}
         <Link
           href="/checkout"
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-zinc-900 text-white text-sm font-medium hover:bg-zinc-800"
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-stone-900 text-white text-sm font-medium hover:bg-stone-800 transition shrink-0"
         >
           <ShoppingBag className="w-4 h-4" />
           <span>Keranjang ({cartCount})</span>

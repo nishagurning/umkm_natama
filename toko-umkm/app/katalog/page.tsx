@@ -1,10 +1,10 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import {
   AlertCircle,
   Check,
-  Coffee,
   RefreshCw,
   Search,
   ShoppingBag,
@@ -33,8 +33,6 @@ interface CartItem {
   quantity: number;
 }
 
-// Taruh foto asli menu Natama Taste ke folder: toko-umkm/public/images/
-// Jika file lokalnya ada, gambar akan otomatis terganti dengan fotomu sendiri!
 const CUSTOM_IMAGES: Record<string, string> = {
   'Sosis Bakar': '/images/sosis bakar.jpg',
   'Otak-otak Singapore': '/images/otak-otak singapore.jpeg',
@@ -63,6 +61,52 @@ const CUSTOM_IMAGES: Record<string, string> = {
   'Lemon Squash': '/images/lemon-squash.jpg',
   'Lychee Tea': '/images/lychee-tea.jpg',
 };
+
+function AllMenuIcon({ className = 'w-4 h-4' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className}>
+      <rect x="3" y="3" width="7.5" height="7.5" rx="2" fill="currentColor" fillOpacity="0.2" stroke="currentColor" strokeWidth="1.8" />
+      <rect x="13.5" y="3" width="7.5" height="7.5" rx="2" stroke="currentColor" strokeWidth="1.8" />
+      <rect x="3" y="13.5" width="7.5" height="7.5" rx="2" stroke="currentColor" strokeWidth="1.8" />
+      <rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2" fill="currentColor" fillOpacity="0.2" stroke="currentColor" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
+function FoodIcon({ className = 'w-4 h-4' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className}>
+      <circle cx="12" cy="5.5" r="1.5" stroke="currentColor" strokeWidth="1.8" />
+      <path
+        d="M4.5 16a7.5 7.5 0 0 1 15 0H4.5Z"
+        fill="currentColor"
+        fillOpacity="0.2"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+      <path d="M2.5 19h19" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function DrinkIcon({ className = 'w-4 h-4' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className}>
+      <path d="M14.5 2.5L12.5 8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M6 8h12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path
+        d="M7.5 8l1.2 11.7a1.5 1.5 0 0 0 1.5 1.3h3.6a1.5 1.5 0 0 0 1.5-1.3L16.5 8h-9Z"
+        fill="currentColor"
+        fillOpacity="0.2"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+      <path d="M8.5 13h7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
 
 function formatRupiah(amount: number) {
   return new Intl.NumberFormat('id-ID', {
@@ -167,7 +211,7 @@ export default function KatalogPage() {
       <main className="py-10 px-4 sm:px-6 lg:px-8">
         <div className="max-w-6xl mx-auto">
           {/* Header & Filter */}
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
+          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mb-8">
             <div>
               <p className="text-xs font-semibold uppercase tracking-widest text-amber-700 mb-1">
                 Menu Resmi • Halal
@@ -180,35 +224,45 @@ export default function KatalogPage() {
               </p>
             </div>
 
-            {/* Search & Category Pills */}
-            <div className="flex flex-col sm:flex-row sm:items-start gap-3">
-              <div className="relative self-start w-full sm:w-64">
+            {/* Search & Segmented Category Bar */}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 shrink-0">
+              <div className="relative w-full sm:w-56">
                 <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Cari menu Natama Taste..."
-                  className="w-full pl-9 pr-4 py-2 text-sm text-stone-900 bg-white border border-stone-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-stone-900"
+                  placeholder="Cari menu..."
+                  className="w-full pl-9 pr-4 py-2 text-sm text-stone-900 bg-white border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-stone-900"
                 />
               </div>
 
-              <div className="flex flex-wrap gap-2">
+              <div className="inline-flex items-center p-1 bg-stone-200/70 border border-stone-200 rounded-xl shrink-0">
                 {categories.map((category) => {
                   const active = selectedCategory === category;
+                  const iconColor =
+                    category === 'Makanan'
+                      ? 'text-amber-600'
+                      : category === 'Minuman'
+                        ? 'text-sky-600'
+                        : 'text-stone-800';
+
                   return (
                     <button
                       key={category}
                       onClick={() => setSelectedCategory(category)}
-                      className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition cursor-pointer ${
+                      className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-sm font-semibold whitespace-nowrap transition cursor-pointer ${
                         active
-                          ? 'bg-stone-900 text-white'
-                          : 'bg-white text-stone-700 border border-stone-200 hover:bg-stone-100'
+                          ? 'bg-white text-stone-900 shadow-sm'
+                          : 'text-stone-600 hover:text-stone-900'
                       }`}
                     >
-                      {category === 'Makanan' && <Utensils className="w-3.5 h-3.5" />}
-                      {category === 'Minuman' && <Coffee className="w-3.5 h-3.5" />}
-                      {category}
+                      <span className={active ? iconColor : 'text-stone-500'}>
+                        {category === 'Semua' && <AllMenuIcon className="w-4 h-4" />}
+                        {category === 'Makanan' && <FoodIcon className="w-4 h-4" />}
+                        {category === 'Minuman' && <DrinkIcon className="w-4 h-4" />}
+                      </span>
+                      <span>{category}</span>
                     </button>
                   );
                 })}
@@ -287,14 +341,17 @@ export default function KatalogPage() {
                     className="group bg-white border border-stone-200 rounded-2xl overflow-hidden flex flex-col justify-between hover:shadow-lg transition"
                   >
                     <div>
-                      {/* Foto Produk Bersih (Rasio 1:1, Tidak Tertutup Label) */}
-                      <div className="relative aspect-square bg-stone-100 overflow-hidden">
+                      {/* Foto Produk Bisa Diklik ke Halaman Detail */}
+                      <Link
+                        href={`/katalog/${product.id}`}
+                        className="block relative aspect-square bg-stone-100 overflow-hidden"
+                      >
                         {!activeSrc ? (
                           <div className="w-full h-full flex flex-col items-center justify-center text-stone-400">
                             {isDrink ? (
-                              <Coffee className="w-10 h-10 mb-1" />
+                              <DrinkIcon className="w-10 h-10 mb-1" />
                             ) : (
-                              <Utensils className="w-10 h-10 mb-1" />
+                              <FoodIcon className="w-10 h-10 mb-1" />
                             )}
                             <span className="text-xs">{product.category}</span>
                           </div>
@@ -318,22 +375,22 @@ export default function KatalogPage() {
                             }}
                           />
                         )}
-                      </div>
+                      </Link>
 
                       {/* Badge & Detail Produk */}
                       <div className="p-4">
                         <div className="flex items-center justify-between gap-2 mb-2">
                           <span
-                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs font-semibold ${
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-semibold ${
                               isDrink
-                                ? 'bg-sky-100 text-sky-800'
-                                : 'bg-amber-100 text-amber-800'
+                                ? 'bg-sky-50 text-sky-700'
+                                : 'bg-amber-50 text-amber-700'
                             }`}
                           >
                             {isDrink ? (
-                              <Coffee className="w-3 h-3" />
+                              <DrinkIcon className="w-3.5 h-3.5" />
                             ) : (
-                              <Utensils className="w-3 h-3" />
+                              <FoodIcon className="w-3.5 h-3.5" />
                             )}
                             {product.category}
                           </span>
@@ -345,9 +402,11 @@ export default function KatalogPage() {
                           )}
                         </div>
 
-                        <h2 className="font-semibold text-stone-900 line-clamp-1">
-                          {product.name}
-                        </h2>
+                        <Link href={`/katalog/${product.id}`} className="block">
+                          <h2 className="font-semibold text-stone-900 line-clamp-1 hover:text-amber-700 transition">
+                            {product.name}
+                          </h2>
+                        </Link>
                         <p className="text-xs text-stone-600 mt-1 line-clamp-2 min-h-[32px]">
                           {product.description || 'Menu pilihan Natama Taste.'}
                         </p>
