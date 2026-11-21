@@ -1,8 +1,42 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 import { createSupabaseAdmin } from '@/lib/supabase';
 
-export async function GET() {
+async function getUserFromRequest(req: NextRequest) {
+  const authHeader = req.headers.get('authorization');
+  if (!authHeader?.startsWith('Bearer ')) return null;
+
+  const token = authHeader.slice(7);
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !anonKey) return null;
+
+  const authClient = createClient(url, anonKey);
+  const { data, error } = await authClient.auth.getUser(token);
+  if (error || !data.user) return null;
+  return data.user;
+}
+
+export async function GET(req: NextRequest) {
   const supabase = createSupabaseAdmin();
+  const mineOnly = req.nextUrl.searchParams.get('mine') === 'true';
+
+  if (mineOnly) {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return NextResponse.json({ error: 'Silakan masuk terlebih dahulu.' }, { status: 401 });
+    }
+
+    const { data, error } = await supabase
+      .from('orders')
+      .select('*, order_items(*)')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false });
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ orders: data });
+  }
+
   const { data, error } = await supabase
     .from('orders')
     .select('*, order_items(*)')
@@ -14,6 +48,14 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Silakan masuk (login) terlebih dahulu untuk membuat pesanan.' },
+        { status: 401 }
+      );
+    }
+
     const body = await req.json();
     const supabase = createSupabaseAdmin();
     const items = body.items as {
@@ -75,6 +117,7 @@ export async function POST(req: NextRequest) {
     const { data: order, error: orderErr } = await supabase
       .from('orders')
       .insert({
+        user_id: user.id,
         order_number: orderNumber,
         customer_name: body.customerName,
         customer_phone: body.customerPhone,
