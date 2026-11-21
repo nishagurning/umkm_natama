@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { ShoppingBag, LogIn, LogOut, Store, User } from 'lucide-react';
 import { getSupabaseClient } from '@/lib/supabase-client';
+import { getCartKey, setActiveCartUser } from '@/lib/cart';
 
 interface UserInfo {
   name: string;
@@ -20,13 +21,15 @@ export default function Navbar() {
   useEffect(() => {
     const updateCartCount = () => {
       try {
-        const cart = JSON.parse(localStorage.getItem('cart') || '[]');
+        const cart = JSON.parse(localStorage.getItem(getCartKey()) || '[]');
         if (Array.isArray(cart)) {
           const total = cart.reduce(
             (sum: number, item: { quantity?: number }) => sum + (item.quantity || 1),
             0
           );
           setCartCount(total);
+        } else {
+          setCartCount(0);
         }
       } catch {
         setCartCount(0);
@@ -53,8 +56,11 @@ export default function Navbar() {
 
       if (!user) {
         setUserInfo(null);
+        setActiveCartUser(null);
         return;
       }
+
+      setActiveCartUser(user.id);
 
       const { data: profile } = await supabase
         .from('profiles')
@@ -89,6 +95,7 @@ export default function Navbar() {
     const supabase = getSupabaseClient();
     await supabase.auth.signOut();
     setUserInfo(null);
+    setActiveCartUser(null);
     window.dispatchEvent(new Event('auth-updated'));
     if (pathname.startsWith('/admin') || pathname.startsWith('/pesanan-saya')) {
       router.push('/katalog');
@@ -197,7 +204,6 @@ export default function Navbar() {
         </div>
       </div>
 
-      {/* Menu navigasi mobile */}
       <div className="md:hidden border-t border-stone-100 px-4 py-2 flex items-center gap-4 overflow-x-auto text-xs">
         <Link href="/" className={navLinkClass('/')}>
           Beranda
