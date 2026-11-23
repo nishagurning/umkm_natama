@@ -1,66 +1,41 @@
-import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-function getSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  const key =
-    serviceKey && !serviceKey.startsWith('tempel_') ? serviceKey : anonKey;
-
-  if (!url || !key) {
-    throw new Error(
-      'File .env.local belum lengkap (NEXT_PUBLIC_SUPABASE_URL atau key masih kosong).'
-    );
-  }
-
-  return createClient(url, key);
-}
+import { NextRequest, NextResponse } from 'next/server';
+import { createSupabaseAdmin, supabase } from '@/lib/supabase';
 
 export async function GET() {
-  try {
-    const supabase = getSupabase();
-    const { data, error } = await supabase
-      .from('products')
-      .select('*')
-      .eq('is_active', true)
-      .order('sku', { ascending: true });
+  const { data, error } = await supabase
+    .from('products')
+    .select('*')
+    .order('sku', { ascending: true });
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    return NextResponse.json(data ?? []);
-  } catch (err) {
-    return NextResponse.json(
-      {
-        error:
-          err instanceof Error ? err.message : 'Terjadi kesalahan pada server.',
-      },
-      { status: 500 }
-    );
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  return NextResponse.json(data || []);
 }
 
-export async function POST(request: Request) {
+export async function POST(req: NextRequest) {
   try {
-    const supabase = getSupabase();
-    const body = await request.json();
+    const supabaseAdmin = createSupabaseAdmin();
+    const body = await req.json();
 
-    const { data, error } = await supabase
+    const { sku, name, category, price, stock, unit, image_url } = body;
+
+    if (!sku || !name || !category) {
+      return NextResponse.json({ error: 'SKU, nama, dan kategori wajib diisi.' }, { status: 400 });
+    }
+
+    const { data, error } = await supabaseAdmin
       .from('products')
       .insert([
         {
-          sku: body.sku || `SKU-${Date.now()}`,
-          name: body.name,
-          description: body.description || '',
-          price: Number(body.price),
-          stock: Number(body.stock ?? 0),
-          unit: body.unit || '1 pcs',
-          variants: Array.isArray(body.variants) ? body.variants : ['Standar'],
-          category: body.category || 'Makanan',
-          image_url: body.image_url || '',
-          is_active: true,
+          sku: String(sku).trim(),
+          name: String(name).trim(),
+          category: String(category).trim(),
+          price: Number(price) || 0,
+          stock: Number(stock) || 0,
+          unit: unit ? String(unit).trim() : '1 pcs',
+          image_url: image_url || null,
         },
       ])
       .select()
@@ -70,13 +45,31 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json(data, { status: 201 });
+    return NextResponse.json({ product: data }, { status: 201 });
   } catch (err) {
-    return NextResponse.json(
-      {
-        error: err instanceof Error ? err.message : 'Gagal menambah produk.',
-      },
-      { status: 500 }
-    );
+    console.error('POST /api/products error:', err);
+    return NextResponse.json({ error: 'Gagal menyimpan produk baru.' }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const supabaseAdmin = createSupabaseAdmin();
+    const id = req.nextUrl.searchParams.get('id');
+
+    if (!id) {
+      return NextResponse.json({ error: 'ID produk wajib disertakan.' }, { status: 400 });
+    }
+
+    const { error } = await supabaseAdmin.from('products').delete().eq('id', id);
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    console.error('DELETE /api/products error:', err);
+    return NextResponse.json({ error: 'Gagal menghapus produk.' }, { status: 500 });
   }
 }
