@@ -11,6 +11,7 @@ import {
   Utensils,
 } from 'lucide-react';
 import Navbar from '../../components/Navbar';
+import { getCartKey } from '@/lib/cart';
 
 interface Product {
   id: string;
@@ -177,7 +178,8 @@ export default function KatalogPage() {
     const imageSrc =
       customSrc && !failedCustom[product.id] ? customSrc : product.image_url;
 
-    const raw = localStorage.getItem('cart');
+    const cartKey = getCartKey();
+    const raw = localStorage.getItem(cartKey);
     const cart: CartItem[] = raw ? JSON.parse(raw) : [];
     const existingIndex = cart.findIndex((item) => item.id === product.id);
 
@@ -194,7 +196,7 @@ export default function KatalogPage() {
       });
     }
 
-    localStorage.setItem('cart', JSON.stringify(cart));
+    localStorage.setItem(cartKey, JSON.stringify(cart));
     window.dispatchEvent(new Event('storage'));
     window.dispatchEvent(new Event('cart-updated'));
 

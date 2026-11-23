@@ -69,8 +69,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Keranjang masih kosong.' }, { status: 400 });
     }
 
+    // Hitung total jumlah per product_id agar gabungan varian tidak melewati stok
+    const totalQtyByProduct: Record<string, number> = {};
+    for (const item of items) {
+      const qty = Math.max(1, Number(item.quantity) || 1);
+      totalQtyByProduct[item.id] = (totalQtyByProduct[item.id] || 0) + qty;
+    }
+
     let subtotal = 0;
     const verifiedItems = [];
+    const productMap: Record<string, { stock: number; name: string }> = {};
 
     for (const item of items) {
       const qty = Math.max(1, Number(item.quantity) || 1);
@@ -81,12 +89,17 @@ export async function POST(req: NextRequest) {
         .eq('id', item.id)
         .single();
 
-      if (!prod || prod.stock < qty) {
+      const totalRequested = totalQtyByProduct[item.id];
+      if (!prod || prod.stock < totalRequested) {
         return NextResponse.json(
-          { error: `Stok produk ${prod?.name || ''} tidak mencukupi.` },
+          {
+            error: `Stok ${prod?.name || 'produk'} hanya tersedia ${prod?.stock ?? 0}, tidak cukup untuk pesanan ${totalRequested} pcs.`,
+          },
           { status: 400 }
         );
       }
+
+      productMap[prod.id] = { stock: prod.stock, name: prod.name };
 
       const rawVariant = (item.variant || 'Standar').trim();
       const lowerVariant = rawVariant.toLowerCase();
@@ -152,11 +165,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: itemsErr.message }, { status: 500 });
     }
 
-    for (const v of verifiedItems) {
+    // Kurangi stok sekali per product_id sesuai total gabungan
+    for (const [prodId, totalQty] of Object.entries(totalQtyByProduct)) {
+      const currentStock = productMap[prodId]?.stock ?? 0;
       await supabase
         .from('products')
-        .update({ stock: Math.max(0, v.prod.stock - v.quantity) })
-        .eq('id', v.prod.id);
+        .update({ stock: Math.max(0, currentStock - totalQty) })
+        .eq('id', prodId);
     }
 
     return NextResponse.json({ order }, { status: 201 });
