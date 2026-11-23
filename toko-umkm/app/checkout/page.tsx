@@ -406,13 +406,40 @@ export default function CheckoutPage() {
                     onChange={(e) => setPaymentMethod(e.target.value)}
                     className="w-full px-3 py-2.5 border border-stone-300 rounded-lg text-sm bg-white"
                   >
-                    <option value="QRIS">QRIS Instan</option>
-                    <option value="VA BCA">Virtual Account BCA</option>
-                    <option value="VA Mandiri">Virtual Account Mandiri</option>
+                    <option value="QRIS">QRIS (Scan Kode QR)</option>
+                    <option value="VA BCA">Transfer Bank BCA</option>
+                    <option value="VA Mandiri">Transfer Bank Mandiri</option>
                     <option value="COD">COD / Bayar di Tempat</option>
                   </select>
                 </div>
               </div>
+
+              {paymentMethod !== 'COD' && (
+                <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200 text-xs text-amber-950 space-y-1">
+                  {paymentMethod === 'QRIS' ? (
+                    <p>
+                      <strong>QRIS {STORE_PAYMENT_CONFIG.qrisMerchantName}:</strong> Kode QRIS
+                      untuk scan pembayaran akan langsung muncul setelah Anda klik{' '}
+                      <strong>Buat Pesanan</strong>.
+                    </p>
+                  ) : (
+                    <p>
+                      <strong>
+                        {STORE_PAYMENT_CONFIG.banks[paymentMethod]?.bankName || paymentMethod}:
+                      </strong>{' '}
+                      No. Rekening{' '}
+                      <span className="font-mono font-bold">
+                        {STORE_PAYMENT_CONFIG.banks[paymentMethod]?.accountNumber}
+                      </span>{' '}
+                      a.n.{' '}
+                      <strong>
+                        {STORE_PAYMENT_CONFIG.banks[paymentMethod]?.accountHolder}
+                      </strong>
+                      .
+                    </p>
+                  )}
+                </div>
+              )}
 
               {isPickup ? (
                 <div className="p-3.5 rounded-xl bg-stone-50 border border-stone-200 flex items-start gap-2.5 text-xs text-stone-600">

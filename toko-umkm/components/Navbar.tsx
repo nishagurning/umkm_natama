@@ -147,7 +147,7 @@ export default function Navbar() {
           {userInfo?.role === 'penjual' && (
             <Link
               href="/admin"
-              className="inline-flex items-center gap-1.5 text-sm font-semibold text-amber-700 hover:text-amber-800"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-sm font-semibold text-amber-800 hover:bg-amber-100"
             >
               <Store className="w-4 h-4" />
               Dashboard Penjual
@@ -156,13 +156,15 @@ export default function Navbar() {
         </nav>
 
         <div className="flex items-center gap-2 sm:gap-3">
-          <Link
-            href="/checkout"
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-zinc-900 text-white text-sm font-medium hover:bg-zinc-800 transition"
-          >
-            <ShoppingBag className="w-4 h-4" />
-            <span className="hidden sm:inline">Keranjang</span> ({cartCount})
-          </Link>
+          {userInfo?.role !== 'penjual' && (
+            <Link
+              href="/checkout"
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-zinc-900 text-white text-sm font-medium hover:bg-zinc-800 transition"
+            >
+              <ShoppingBag className="w-4 h-4" />
+              <span className="hidden sm:inline">Keranjang</span> ({cartCount})
+            </Link>
+          )}
 
           {userInfo ? (
             <div className="flex items-center gap-2">
