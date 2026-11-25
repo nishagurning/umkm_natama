@@ -411,8 +411,17 @@ export default function AdminPage() {
     .filter((o) => o.payment_status === 'paid')
     .reduce((sum, o) => sum + Number(o.total_amount || 0), 0);
 
+  // Pesanan aktif yang belum selesai & belum dibatalkan (untuk badge sidebar)
+  const activeOrdersCount = orders.filter(
+    (o) => o.order_status !== 'completed' && o.order_status !== 'cancelled'
+  ).length;
+
+  // Pesanan aktif yang masih perlu dicek/diproses
   const pendingOrdersCount = orders.filter(
-    (o) => o.payment_status !== 'paid' || o.order_status === 'pending'
+    (o) =>
+      o.order_status !== 'completed' &&
+      o.order_status !== 'cancelled' &&
+      (o.payment_status !== 'paid' || o.order_status === 'pending')
   ).length;
 
   const lowStockCount = products.filter((p) => Number(p.stock) <= 5).length;
@@ -427,8 +436,15 @@ export default function AdminPage() {
       o.customer_phone?.toLowerCase().includes(q);
 
     if (!matchSearch) return false;
+    if (orderFilter === 'aktif') {
+      return o.order_status !== 'completed' && o.order_status !== 'cancelled';
+    }
     if (orderFilter === 'perlu_proses') {
-      return o.payment_status !== 'paid' || o.order_status === 'pending';
+      return (
+        o.order_status !== 'completed' &&
+        o.order_status !== 'cancelled' &&
+        (o.payment_status !== 'paid' || o.order_status === 'pending')
+      );
     }
     if (orderFilter === 'diproses') return o.order_status === 'processing';
     if (orderFilter === 'dikirim') return o.order_status === 'shipped';
@@ -501,7 +517,7 @@ export default function AdminPage() {
                   activeTab === 'orders' ? 'bg-white text-orange-600' : 'bg-zinc-800 text-zinc-200'
                 }`}
               >
-                {orders.length}
+                {activeOrdersCount}
               </span>
             </button>
 
@@ -600,7 +616,7 @@ export default function AdminPage() {
           <div className="bg-white border border-stone-200 rounded-2xl p-5">
             <div className="flex items-center gap-2 text-xs text-stone-500 font-medium">
               <ShoppingCart className="w-4 h-4 text-sky-600" />
-              <span>Total Pesanan</span>
+              <span>Total Riwayat Pesanan</span>
             </div>
             <div className="text-2xl font-bold mt-2">{orders.length}</div>
           </div>
@@ -626,6 +642,7 @@ export default function AdminPage() {
               <div className="flex flex-wrap gap-2">
                 {[
                   { id: 'semua', label: 'Semua' },
+                  { id: 'aktif', label: `Belum Selesai (${activeOrdersCount})` },
                   { id: 'perlu_proses', label: 'Perlu Cek / Proses' },
                   { id: 'diproses', label: 'Sedang Diproses' },
                   { id: 'dikirim', label: 'Dikirim' },
@@ -664,6 +681,7 @@ export default function AdminPage() {
               <div className="space-y-4">
                 {filteredOrders.map((order) => {
                   const isPaid = order.payment_status === 'paid';
+                  const isCompleted = order.order_status === 'completed';
                   const isPickup =
                     !order.shipping_address ||
                     order.shipping_address.toLowerCase().includes('ambil di outlet');
@@ -768,22 +786,34 @@ export default function AdminPage() {
                               onClick={() =>
                                 updateOrder(
                                   order.id,
-                                  { payment_status: 'paid', order_status: 'processing' },
-                                  'Pesanan ditandai Lunas & Diproses!'
+                                  {
+                                    payment_status: 'paid',
+                                    order_status: isCompleted ? 'completed' : 'processing',
+                                  },
+                                  isCompleted
+                                    ? 'Pembayaran ditandai Lunas!'
+                                    : 'Pesanan ditandai Lunas & Diproses!'
                                 )
                               }
                               className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold transition"
                             >
                               <Check className="w-3.5 h-3.5" />
-                              <span>Tandai Lunas & Proses</span>
+                              <span>{isCompleted ? 'Tandai Lunas' : 'Tandai Lunas & Proses'}</span>
                             </button>
                           )}
 
                           <select
                             value={order.order_status || 'pending'}
-                            onChange={(e) =>
-                              updateOrder(order.id, { order_status: e.target.value })
-                            }
+                            onChange={(e) => {
+                              const nextStatus = e.target.value;
+                              const payload: { order_status: string; payment_status?: string } = {
+                                order_status: nextStatus,
+                              };
+                              if (nextStatus === 'completed' && !isPaid) {
+                                payload.payment_status = 'paid';
+                              }
+                              updateOrder(order.id, payload);
+                            }}
                             className="px-3 py-2 border border-stone-200 rounded-xl text-xs font-medium bg-white"
                           >
                             <option value="pending">Menunggu (Pending)</option>

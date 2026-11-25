@@ -18,6 +18,7 @@ import {
   MapPin,
   Store,
   AlertTriangle,
+  LayoutGrid,
 } from 'lucide-react';
 
 interface CartItem {
@@ -51,6 +52,7 @@ export default function CheckoutPage() {
 
   const [mounted, setMounted] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isSeller, setIsSeller] = useState(false);
   const [accessToken, setAccessToken] = useState('');
   const [userId, setUserId] = useState('');
 
@@ -107,9 +109,11 @@ export default function CheckoutPage() {
 
           const { data: profile } = await supabase
             .from('profiles')
-            .select('full_name, phone')
+            .select('full_name, phone, role')
             .eq('id', session.user.id)
             .single();
+
+          setIsSeller(profile?.role === 'penjual');
 
           const resolvedName =
             profile?.full_name ||
@@ -125,6 +129,7 @@ export default function CheckoutPage() {
           setHasSavedPhone(Boolean(resolvedPhone.trim()));
         } else {
           setIsLoggedIn(false);
+          setIsSeller(false);
           setAccessToken('');
           setUserId('');
           setActiveCartUser(null);
@@ -241,6 +246,7 @@ export default function CheckoutPage() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (isSeller) return;
     if (!isLoggedIn) {
       router.push('/login?redirect=/checkout');
       return;
@@ -306,13 +312,39 @@ export default function CheckoutPage() {
             className="inline-flex items-center gap-1.5 text-sm font-medium text-stone-600 hover:text-zinc-900"
           >
             <ArrowLeft className="w-4 h-4" />
-            Tambah Menu Lain
+            {isSeller ? 'Pratinjau Katalog' : 'Tambah Menu Lain'}
           </Link>
         </div>
 
         {!mounted ? (
           <div className="bg-white border border-stone-200 rounded-xl p-10 text-center text-stone-500">
             Memuat keranjang...
+          </div>
+        ) : isSeller ? (
+          <div className="bg-white border border-amber-200 rounded-2xl p-8 text-center space-y-4 max-w-xl mx-auto">
+            <AlertTriangle className="w-10 h-10 text-amber-600 mx-auto" />
+            <h2 className="text-lg font-bold text-zinc-900">
+              Halaman Checkout Khusus Pembeli
+            </h2>
+            <p className="text-sm text-stone-600">
+              Anda sedang login sebagai akun <strong>Penjual</strong> ({customerName}).
+              Akun penjual tidak dapat membuat pesanan di toko sendiri.
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+              <Link
+                href="/admin"
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-zinc-900 text-white text-sm font-semibold hover:bg-zinc-800"
+              >
+                <LayoutGrid className="w-4 h-4" />
+                Kembali ke Dashboard Penjual
+              </Link>
+              <Link
+                href="/katalog"
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-stone-300 text-stone-700 text-sm font-medium hover:bg-stone-50"
+              >
+                Pratinjau Katalog
+              </Link>
+            </div>
           </div>
         ) : cart.length === 0 ? (
           <div className="bg-white border border-stone-200 rounded-xl p-10 text-center space-y-3">

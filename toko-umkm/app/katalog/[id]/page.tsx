@@ -5,9 +5,12 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import Navbar from '@/components/Navbar';
 import { getCartKey } from '@/lib/cart';
+import { getSupabaseClient } from '@/lib/supabase-client';
 import {
   ArrowLeft,
   Check,
+  Eye,
+  LayoutGrid,
   Minus,
   Plus,
   ShieldCheck,
@@ -84,6 +87,7 @@ export default function ProductDetailPage() {
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isSeller, setIsSeller] = useState(false);
 
   const [selectedVariant, setSelectedVariant] = useState('');
   const [note, setNote] = useState('');
@@ -91,6 +95,7 @@ export default function ProductDetailPage() {
   const [inCartQty, setInCartQty] = useState(0);
   const [added, setAdded] = useState(false);
   const [failedCustom, setFailedCustom] = useState(false);
+  const [failedDb, setFailedDb] = useState(false);
 
   const syncInCartQty = (id: string) => {
     try {
@@ -105,6 +110,38 @@ export default function ProductDetailPage() {
       setInCartQty(0);
     }
   };
+
+  useEffect(() => {
+    const supabase = getSupabaseClient();
+    const checkRole = async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (!session?.user) {
+          setIsSeller(false);
+          return;
+        }
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', session.user.id)
+          .single();
+        setIsSeller(profile?.role === 'penjual');
+      } catch {
+        setIsSeller(false);
+      }
+    };
+
+    checkRole();
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(() => {
+      checkRole();
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   useEffect(() => {
     if (!productId) return;
@@ -184,14 +221,24 @@ export default function ProductDetailPage() {
   const isQtyEmptyOrZero = !qtyInput.trim() || isNaN(parsedQty) || parsedQty < 1;
   const isOverStock = !isQtyEmptyOrZero && parsedQty > remainingStock;
   const outOfStock = product.stock <= 0 || remainingStock <= 0;
-  const cannotOrder = outOfStock || isQtyEmptyOrZero || isOverStock;
+  const cannotOrder = isSeller || outOfStock || isQtyEmptyOrZero || isOverStock;
 
   const quickNotes = isDrink
     ? ['Es sedikit', 'Tanpa es', 'Less sugar']
     : ['Saus pisah', 'Tidak pedas', 'Ekstra saus'];
 
+  const hasUploadedDbImg = Boolean(
+    product.image_url && product.image_url.includes('menu-images') && !failedDb
+  );
   const customSrc = CUSTOM_IMAGES[product.name];
-  const imageSrc = customSrc && !failedCustom ? customSrc : product.image_url;
+  const tryingCustom = !hasUploadedDbImg && Boolean(customSrc && !failedCustom);
+  const imageSrc = hasUploadedDbImg
+    ? product.image_url
+    : tryingCustom
+      ? customSrc
+      : !failedDb
+        ? product.image_url
+        : null;
 
   const addQuickNote = (text: string) => {
     setNote((prev) => {
@@ -258,6 +305,27 @@ export default function ProductDetailPage() {
       <Navbar />
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+        {isSeller && (
+          <div className="mb-6 p-4 rounded-2xl bg-amber-50 border border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <Eye className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
+              <div className="text-sm text-amber-950">
+                <p className="font-semibold">Mode Pratinjau Penjual</p>
+                <p className="text-xs text-amber-800 mt-0.5">
+                  Anda sedang mengecek tampilan detail menu. Pemesanan dinonaktifkan untuk akun penjual.
+                </p>
+              </div>
+            </div>
+            <Link
+              href="/admin"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-zinc-900 text-white text-xs font-semibold hover:bg-zinc-800 shrink-0 transition"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              Kembali ke Dashboard
+            </Link>
+          </div>
+        )}
+
         <Link
           href="/katalog"
           className="inline-flex items-center gap-2 text-sm font-medium text-stone-600 hover:text-zinc-900 mb-6"
@@ -274,7 +342,13 @@ export default function ProductDetailPage() {
                 src={imageSrc}
                 alt={product.name}
                 className="w-full h-full object-cover"
-                onError={() => setFailedCustom(true)}
+                onError={() => {
+                  if (tryingCustom) {
+                    setFailedCustom(true);
+                  } else {
+                    setFailedDb(true);
+                  }
+                }}
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center text-stone-400 text-sm">
@@ -337,127 +411,148 @@ export default function ProductDetailPage() {
               </div>
             </div>
 
-            {/* Catatan Pembelian */}
-            <div className="space-y-2">
-              <p className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-stone-500">
-                <MessageSquare className="w-3.5 h-3.5" />
-                Catatan Pembelian (Opsional)
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {quickNotes.map((chip) => (
-                  <button
-                    key={chip}
-                    type="button"
-                    onClick={() => addQuickNote(chip)}
-                    className="px-3 py-1 rounded-lg text-xs font-medium bg-stone-100 text-stone-700 hover:bg-stone-200 cursor-pointer"
-                  >
-                    + {chip}
-                  </button>
-                ))}
-              </div>
-              <textarea
-                rows={2}
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                placeholder={
-                  isDrink
-                    ? 'Contoh: Es sedikit, jangan terlalu manis...'
-                    : 'Contoh: Saus dipisah, tanpa mayones...'
-                }
-                className="w-full px-3.5 py-2.5 border border-stone-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900"
-              />
-            </div>
+            {!isSeller && (
+              <>
+                {/* Catatan Pembelian */}
+                <div className="space-y-2">
+                  <p className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-stone-500">
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    Catatan Pembelian (Opsional)
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {quickNotes.map((chip) => (
+                      <button
+                        key={chip}
+                        type="button"
+                        onClick={() => addQuickNote(chip)}
+                        className="px-3 py-1 rounded-lg text-xs font-medium bg-stone-100 text-stone-700 hover:bg-stone-200 cursor-pointer"
+                      >
+                        + {chip}
+                      </button>
+                    ))}
+                  </div>
+                  <textarea
+                    rows={2}
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    placeholder={
+                      isDrink
+                        ? 'Contoh: Es sedikit, jangan terlalu manis...'
+                        : 'Contoh: Saus dipisah, tanpa mayones...'
+                    }
+                    className="w-full px-3.5 py-2.5 border border-stone-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900"
+                  />
+                </div>
+              </>
+            )}
 
             <div className="flex items-center justify-between text-xs text-stone-500 pt-2 border-t border-stone-100">
               <span>Kode Menu: {product.sku || '-'}</span>
               <span>
                 Stok tersedia: <strong>{product.stock}</strong>
-                {inCartQty > 0 && ` (${inCartQty} sudah di keranjang)`}
+                {!isSeller && inCartQty > 0 && ` (${inCartQty} sudah di keranjang)`}
               </span>
             </div>
 
-            {/* Peringatan Jika Melebihi Stok */}
-            {isOverStock && (
-              <div className="p-3 rounded-xl bg-red-50 border border-red-200 flex items-start gap-2 text-xs text-red-700">
-                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                <span>
-                  Jumlah pesanan (<strong>{parsedQty}</strong>) melebihi stok yang tersedia (
-                  <strong>maksimal {remainingStock}</strong>
-                  {inCartQty > 0 ? ` karena ${inCartQty} sudah ada di keranjang` : ''}).
+            {isSeller ? (
+              <div className="p-4 rounded-xl bg-stone-100 border border-stone-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <span className="text-xs font-medium text-stone-700">
+                  Mode Pratinjau Penjual — tombol pemesanan disembunyikan untuk akun ini.
                 </span>
-              </div>
-            )}
-
-            {outOfStock && (
-              <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 flex items-start gap-2 text-xs text-amber-800">
-                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                <span>
-                  {product.stock <= 0
-                    ? 'Maaf, stok menu ini sedang habis.'
-                    : `Semua stok (${product.stock}) menu ini sudah berada di keranjang Anda.`}
-                </span>
-              </div>
-            )}
-
-            {/* Jumlah + Tombol Tambah */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-1">
-              <div className="inline-flex items-center justify-between border border-stone-200 rounded-xl bg-stone-50 px-2 py-1.5">
-                <button
-                  type="button"
-                  onClick={() => stepQty(-1)}
-                  disabled={outOfStock || isQtyEmptyOrZero || parsedQty <= 1}
-                  className="p-2 text-stone-600 hover:text-zinc-900 disabled:opacity-40 cursor-pointer"
-                  aria-label="Kurangi"
+                <Link
+                  href="/admin"
+                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-zinc-900 text-white text-xs font-semibold hover:bg-zinc-800 shrink-0"
                 >
-                  <Minus className="w-4 h-4" />
-                </button>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={qtyInput}
-                  disabled={outOfStock}
-                  onChange={(e) => handleQtyChange(e.target.value)}
-                  className="w-14 text-center bg-transparent font-bold text-sm focus:outline-none"
-                  aria-label="Jumlah"
-                />
-                <button
-                  type="button"
-                  onClick={() => stepQty(1)}
-                  disabled={outOfStock || (!isQtyEmptyOrZero && parsedQty >= remainingStock)}
-                  className="p-2 text-stone-600 hover:text-zinc-900 disabled:opacity-40 cursor-pointer"
-                  aria-label="Tambah"
-                >
-                  <Plus className="w-4 h-4" />
-                </button>
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                  Edit di Dashboard
+                </Link>
               </div>
-
-              <button
-                type="button"
-                onClick={handleAddToCart}
-                disabled={cannotOrder}
-                className={`flex-1 py-3.5 px-6 rounded-xl text-sm font-semibold inline-flex items-center justify-center gap-2 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
-                  added
-                    ? 'bg-emerald-600 text-white'
-                    : 'bg-zinc-900 text-white hover:bg-zinc-800'
-                }`}
-              >
-                {added ? (
-                  <>
-                    <Check className="w-4 h-4" />
-                    Masuk ke Keranjang!
-                  </>
-                ) : outOfStock ? (
-                  'Stok Habis / Penuh'
-                ) : isOverStock ? (
-                  `Maksimal ${remainingStock} pcs`
-                ) : (
-                  <>
-                    <ShoppingBag className="w-4 h-4" />
-                    Tambah ({formatRupiah(unitPrice * (isQtyEmptyOrZero ? 0 : parsedQty))})
-                  </>
+            ) : (
+              <>
+                {/* Peringatan Jika Melebihi Stok */}
+                {isOverStock && (
+                  <div className="p-3 rounded-xl bg-red-50 border border-red-200 flex items-start gap-2 text-xs text-red-700">
+                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>
+                      Jumlah pesanan (<strong>{parsedQty}</strong>) melebihi stok yang tersedia (
+                      <strong>maksimal {remainingStock}</strong>
+                      {inCartQty > 0 ? ` karena ${inCartQty} sudah ada di keranjang` : ''}).
+                    </span>
+                  </div>
                 )}
-              </button>
-            </div>
+
+                {outOfStock && (
+                  <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 flex items-start gap-2 text-xs text-amber-800">
+                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>
+                      {product.stock <= 0
+                        ? 'Maaf, stok menu ini sedang habis.'
+                        : `Semua stok (${product.stock}) menu ini sudah berada di keranjang Anda.`}
+                    </span>
+                  </div>
+                )}
+
+                {/* Jumlah + Tombol Tambah */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-1">
+                  <div className="inline-flex items-center justify-between border border-stone-200 rounded-xl bg-stone-50 px-2 py-1.5">
+                    <button
+                      type="button"
+                      onClick={() => stepQty(-1)}
+                      disabled={outOfStock || isQtyEmptyOrZero || parsedQty <= 1}
+                      className="p-2 text-stone-600 hover:text-zinc-900 disabled:opacity-40 cursor-pointer"
+                      aria-label="Kurangi"
+                    >
+                      <Minus className="w-4 h-4" />
+                    </button>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={qtyInput}
+                      disabled={outOfStock}
+                      onChange={(e) => handleQtyChange(e.target.value)}
+                      className="w-14 text-center bg-transparent font-bold text-sm focus:outline-none"
+                      aria-label="Jumlah"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => stepQty(1)}
+                      disabled={outOfStock || (!isQtyEmptyOrZero && parsedQty >= remainingStock)}
+                      className="p-2 text-stone-600 hover:text-zinc-900 disabled:opacity-40 cursor-pointer"
+                      aria-label="Tambah"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleAddToCart}
+                    disabled={cannotOrder}
+                    className={`flex-1 py-3.5 px-6 rounded-xl text-sm font-semibold inline-flex items-center justify-center gap-2 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+                      added
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-zinc-900 text-white hover:bg-zinc-800'
+                    }`}
+                  >
+                    {added ? (
+                      <>
+                        <Check className="w-4 h-4" />
+                        Masuk ke Keranjang!
+                      </>
+                    ) : outOfStock ? (
+                      'Stok Habis / Penuh'
+                    ) : isOverStock ? (
+                      `Maksimal ${remainingStock} pcs`
+                    ) : (
+                      <>
+                        <ShoppingBag className="w-4 h-4" />
+                        Tambah ({formatRupiah(unitPrice * (isQtyEmptyOrZero ? 0 : parsedQty))})
+                      </>
+                    )}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </main>

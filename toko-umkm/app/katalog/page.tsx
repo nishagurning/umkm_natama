@@ -5,6 +5,8 @@ import Link from 'next/link';
 import {
   AlertCircle,
   Check,
+  Eye,
+  LayoutGrid,
   RefreshCw,
   Search,
   ShoppingBag,
@@ -12,6 +14,7 @@ import {
 } from 'lucide-react';
 import Navbar from '../../components/Navbar';
 import { getCartKey } from '@/lib/cart';
+import { getSupabaseClient } from '@/lib/supabase-client';
 
 interface Product {
   id: string;
@@ -126,6 +129,7 @@ export default function KatalogPage() {
   const [addedId, setAddedId] = useState<string | null>(null);
   const [failedCustom, setFailedCustom] = useState<Record<string, boolean>>({});
   const [failedDb, setFailedDb] = useState<Record<string, boolean>>({});
+  const [isSeller, setIsSeller] = useState(false);
 
   const fetchProducts = async () => {
     setLoading(true);
@@ -153,6 +157,36 @@ export default function KatalogPage() {
 
   useEffect(() => {
     fetchProducts();
+
+    const supabase = getSupabaseClient();
+    const checkRole = async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (!session?.user) {
+          setIsSeller(false);
+          return;
+        }
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', session.user.id)
+          .single();
+        setIsSeller(profile?.role === 'penjual');
+      } catch {
+        setIsSeller(false);
+      }
+    };
+
+    checkRole();
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(() => {
+      checkRole();
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const categories = ['Semua', 'Makanan', 'Minuman'];
@@ -172,11 +206,17 @@ export default function KatalogPage() {
   }, [products, selectedCategory, search]);
 
   const handleAddToCart = (product: Product) => {
-    if (product.stock <= 0) return;
+    if (isSeller || product.stock <= 0) return;
 
+    const hasUploadedDbImg = Boolean(
+      product.image_url && product.image_url.includes('menu-images') && !failedDb[product.id]
+    );
     const customSrc = CUSTOM_IMAGES[product.name];
-    const imageSrc =
-      customSrc && !failedCustom[product.id] ? customSrc : product.image_url;
+    const imageSrc = hasUploadedDbImg
+      ? product.image_url
+      : customSrc && !failedCustom[product.id]
+        ? customSrc
+        : product.image_url;
 
     const cartKey = getCartKey();
     const raw = localStorage.getItem(cartKey);
@@ -212,6 +252,28 @@ export default function KatalogPage() {
 
       <main className="py-10 px-4 sm:px-6 lg:px-8">
         <div className="max-w-6xl mx-auto">
+          {/* Banner Mode Pratinjau untuk Penjual */}
+          {isSeller && (
+            <div className="mb-6 p-4 rounded-2xl bg-amber-50 border border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <Eye className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
+                <div className="text-sm text-amber-950">
+                  <p className="font-semibold">Mode Pratinjau Penjual</p>
+                  <p className="text-xs text-amber-800 mt-0.5">
+                    Anda sedang melihat tampilan toko sebagaimana dilihat pembeli. Akun penjual tidak dapat memesan menu.
+                  </p>
+                </div>
+              </div>
+              <Link
+                href="/admin"
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-zinc-900 text-white text-xs font-semibold hover:bg-zinc-800 shrink-0 transition"
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+                Kembali ke Dashboard
+              </Link>
+            </div>
+          )}
+
           {/* Header & Filter */}
           <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mb-8">
             <div>
@@ -329,13 +391,20 @@ export default function KatalogPage() {
                 const isAdded = addedId === product.id;
                 const outOfStock = product.stock <= 0;
 
+                const hasUploadedDbImg = Boolean(
+                  product.image_url &&
+                    product.image_url.includes('menu-images') &&
+                    !failedDb[product.id]
+                );
                 const customSrc = CUSTOM_IMAGES[product.name];
-                const tryingCustom = Boolean(customSrc && !failedCustom[product.id]);
-                const activeSrc = tryingCustom
-                  ? customSrc
-                  : !failedDb[product.id]
-                    ? product.image_url
-                    : null;
+                const tryingCustom = !hasUploadedDbImg && Boolean(customSrc && !failedCustom[product.id]);
+                const activeSrc = hasUploadedDbImg
+                  ? product.image_url
+                  : tryingCustom
+                    ? customSrc
+                    : !failedDb[product.id]
+                      ? product.image_url
+                      : null;
 
                 return (
                   <div
@@ -430,27 +499,37 @@ export default function KatalogPage() {
                         </span>
                       </div>
 
-                      <button
-                        onClick={() => handleAddToCart(product)}
-                        disabled={outOfStock}
-                        className={`w-full inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-medium transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
-                          isAdded
-                            ? 'bg-emerald-600 text-white'
-                            : 'bg-stone-900 text-white hover:bg-stone-800'
-                        }`}
-                      >
-                        {isAdded ? (
-                          <>
-                            <Check className="w-4 h-4" />
-                            Ditambahkan
-                          </>
-                        ) : (
-                          <>
-                            <ShoppingBag className="w-4 h-4" />
-                            {outOfStock ? 'Habis' : 'Tambah ke Keranjang'}
-                          </>
-                        )}
-                      </button>
+                      {isSeller ? (
+                        <Link
+                          href={`/katalog/${product.id}`}
+                          className="w-full inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-medium bg-stone-100 text-stone-700 hover:bg-stone-200 transition"
+                        >
+                          <Eye className="w-4 h-4" />
+                          Pratinjau Detail
+                        </Link>
+                      ) : (
+                        <button
+                          onClick={() => handleAddToCart(product)}
+                          disabled={outOfStock}
+                          className={`w-full inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-medium transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+                            isAdded
+                              ? 'bg-emerald-600 text-white'
+                              : 'bg-stone-900 text-white hover:bg-stone-800'
+                          }`}
+                        >
+                          {isAdded ? (
+                            <>
+                              <Check className="w-4 h-4" />
+                              Ditambahkan
+                            </>
+                          ) : (
+                            <>
+                              <ShoppingBag className="w-4 h-4" />
+                              {outOfStock ? 'Habis' : 'Tambah ke Keranjang'}
+                            </>
+                          )}
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
