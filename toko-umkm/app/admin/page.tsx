@@ -205,6 +205,32 @@ export default function AdminPage() {
     loadData();
   }, []);
 
+  // Auto-refresh pesanan di latar belakang setiap 15 detik
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const oRes = await fetch('/api/orders', { cache: 'no-store' });
+        if (!oRes.ok) return;
+        const oData = await oRes.json();
+        const orderList: Order[] = Array.isArray(oData) ? oData : oData?.orders || [];
+        setOrders(orderList);
+        setTrackingInputs((prev) => {
+          const next = { ...prev };
+          orderList.forEach((o) => {
+            if (next[o.id] === undefined) {
+              next[o.id] = o.tracking_number || '';
+            }
+          });
+          return next;
+        });
+      } catch {
+        // abaikan gangguan sementara
+      }
+    }, 15000);
+
+    return () => clearInterval(interval);
+  }, []);
+
   const uploadImageFile = async (file: File): Promise<string> => {
     const token = await getAccessToken();
     const formData = new FormData();
@@ -480,8 +506,8 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen flex bg-[#F8F7F4] text-zinc-900">
-      {/* Sidebar Kiri */}
-      <aside className="w-64 bg-zinc-950 text-white flex flex-col justify-between shrink-0 min-h-screen sticky top-0">
+      {/* Sidebar Kiri — dikunci setinggi layar agar tombol Keluar Akun selalu terlihat */}
+      <aside className="w-64 bg-zinc-950 text-white flex flex-col justify-between shrink-0 h-screen sticky top-0 overflow-y-auto">
         <div className="p-5 space-y-8">
           {/* Brand */}
           <div className="flex items-center gap-3">
@@ -545,7 +571,7 @@ export default function AdminPage() {
         </div>
 
         {/* Footer Sidebar */}
-        <div className="p-5 border-t border-zinc-800 space-y-2.5">
+        <div className="p-5 pb-12 border-t border-zinc-800 space-y-2.5">
           <div className="text-xs text-zinc-400 truncate">Login: {sellerName}</div>
           <Link
             href="/katalog"
